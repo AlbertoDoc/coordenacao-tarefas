@@ -13,8 +13,10 @@ sem_t sem_aluno_cadeira;
 void* f_monitor(void *v) {
 
   while(1) {
+    // Monitor dorme e espera um aluno acorda-lo
     sem_wait(&sem_aluno_cadeira);
     printf("Monitor atendeu um estudante.\n");
+    // Monitor termina o atendimento do aluno
     sem_post(&sem_aluno_atendido);
   }
   return NULL;
@@ -25,13 +27,20 @@ void* f_estudante(void* v) {
   int id = *(int*) v;
 
   sleep(id%3);
+  // Verificando se existe cadeira de espera disponivel e caso tenha ocupa uma posição
   if (sem_trywait(&sem_cadeiras) == 0) {
     printf("Estudante %d entrou na sala de monitoria.\n", id);
+    // Requisita um lugar na cadeira do monitor para ser atendido
     sem_wait(&sem_cad_monitor);
     printf("Estudante %d sentou na cadeira de atendimento.\n", id);
+    // Acorda o monitor para ser atendido
     sem_post(&sem_aluno_cadeira);
+    // Deixa uma cadeira de espera livre
     sem_post(&sem_cadeiras);
+    
+    // Aluno espera o atendimento encerrar
     sem_wait(&sem_aluno_atendido);
+    // Deixa a cadeira de atendimento
     sem_post(&sem_cad_monitor);
     printf("Estudante %d deixou a sala de monitoria.\n", id);
   } else
@@ -65,9 +74,13 @@ int main() {
   int i, id[qtdEstudantes];
 
   // Criacao dos semaforos
+  // Semaforo com a quantidade de cadeiras de espera
   sem_init(&sem_cadeiras, 0, qtdCadeiras);
+  // Semaforo da cadeira de atendimento do monitor
   sem_init(&sem_cad_monitor, 0, 1);
+  // Semaforo que indica se o monitor esta dormindo
   sem_init(&sem_aluno_cadeira, 0, 0);
+  // Semaforo que indica que o monitor terminou o atendimento
   sem_init(&sem_aluno_atendido, 0, 0);
   
   // Criacao das threads dos estudantes
