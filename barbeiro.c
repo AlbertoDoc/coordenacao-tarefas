@@ -8,7 +8,7 @@
 #define MAX_CLIENTES 20
 
 // Quantidade de clientes que querem cortar o cabelo
-#define QTD_CLIENTES 20
+#define QTD_CLIENTES 50
 
 // Quantidade atual de clientes
 int clientes = 0;
@@ -22,18 +22,18 @@ pthread_t thr_barbeiros[3];
 // Inicialização dos semafóros
 sem_t mutex, sem_cadeiras, sem_barbeiros, sem_clientes, sem_pagamento, sem_recibo;
 
-// Struct para as fila
+// Struct para as filas
 typedef struct {
 	sem_t primeiro;
 	sem_t segundo;
-} Fifo;
+} Fila;
 
 // Inicialização das filas
-Fifo *salaDeEspera, *sofa;
+Fila *salaDeEspera, *sofa;
 
 // Criação da fila
-Fifo* criaFila(int n) {
-	Fifo* f = (Fifo*) malloc(sizeof(Fifo));
+Fila* criaFila(int n) {
+	Fila* f = (Fila*) malloc(sizeof(Fila));
 
 	sem_init(&(f->primeiro), 0, 0);
 	sem_init(&(f->segundo), 0, n);
@@ -41,12 +41,15 @@ Fifo* criaFila(int n) {
 	return f;
 }
 
-void esperaFila(Fifo* f, int n) {
+// Entra na fila
+void esperaFila(Fila* f) {
 	sem_wait(&(f->segundo));
 	sem_post(&(f->primeiro));
 }
 
-void sinalizaFila(Fifo* f) {
+
+// Sai da fila
+void sinalizaFila(Fila* f) {
 	sem_wait(&(f->primeiro));
 	sem_post(&(f->segundo));
 }
@@ -56,41 +59,53 @@ void* barbearia(void* arg) {
 
 	sem_wait(&mutex);
 
+	// Se a quantidade de cliente for maior que o máximo o excedente vai embora (e volta depois)
 	if (clientes >= MAX_CLIENTES) {
 		sem_post(&mutex);
-		printf("Cliente %d: indo embora...\n", n);
+		printf("Barbearia cheia! Cliente %d: indo embora...\n", n);
 	}
 
 	clientes += 1;
 
 	sem_post(&mutex);
 
-	esperaFila(salaDeEspera, n);
+	// Entra na sala de espera
+	esperaFila(salaDeEspera);
 
 	printf("Cliente %d: entrando na fila de espera\n", n);
 
-	esperaFila(sofa, n);
+	// Senta no sofá
+	esperaFila(sofa);
 
 	printf("Cliente %d: sentando no sofa\n", n);
 
 	sinalizaFila(salaDeEspera);
 
+	// Cliente ocupa uma cadeira
 	sem_wait(&sem_cadeiras);
 
 	printf("Cliente %d: sentando na cadeira\n", n);
 	sleep(3);
+
+	// Cliente libera uma vaga no sofa
 	sinalizaFila(sofa);
 
+	//  Cliente termina de cortar cabelo
 	sem_post(&sem_clientes);
 
+	// Acorda um barbeiro
 	sem_wait(&sem_barbeiros);
 
 	printf("Cliente %d: teve o cabelo cortado\n", n);
 	sleep(2);
 	printf("Cliente %d: pagando\n", n);
 
+	// Cliente paga e vai embora
 	sem_post(&sem_pagamento);
+
+	// Barbeiro recebe o dinheiro e emite o recibo
 	sem_wait(&sem_recibo);
+
 	sem_wait(&mutex);
 
 	clientes -= 1;
@@ -104,17 +119,25 @@ void* cortar(void* arg) {
 	int n = *(int*) arg;
 
 	for (int i = 0; i < QTD_CLIENTES; i++) {
+		// Cliente senta na cadeira e tem o cabelo cortado
 		sem_wait(&sem_clientes);
+
+		// Barbeiro termina de cortar o cabelo
 		sem_post(&sem_barbeiros);
 
 		printf("\tBarbeiro %d: cortando cabelo\n", n);
 		sleep(3);
+
+		// Cliente realiza o pagamento
 		sem_wait(&sem_pagamento);
 
 		printf("\tBarbeiro %d: aceitando pagamento\n", n);
 		sleep(1);
+
+		// Barbeiro emite o recibo
 		sem_post(&sem_recibo);
 
+		// Cadeira fica vaga
 		sem_post(&sem_cadeiras);
 	}
 }
